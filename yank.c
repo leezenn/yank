@@ -35,7 +35,7 @@ enum {
 	KEY_UP,
 	KEY_RIGHT,
 	KEY_DOWN,
-	KEY_LEFT
+	KEY_LEFT,
 };
 
 struct field {
@@ -432,7 +432,7 @@ main(int argc, char *argv[])
 #endif
 
 	pat = strtopat(" ");
-	while ((c = getopt(argc, argv, "1ilvxd:g:")) != -1)
+	while ((c = getopt(argc, argv, "1ilvxd:g:")) != -1) {
 		switch (c) {
 		case '1':
 			one = 1;
@@ -463,6 +463,7 @@ main(int argc, char *argv[])
 		default:
 			usage();
 		}
+	}
 	argc -= optind;
 	argv += optind;
 
