@@ -156,7 +156,7 @@ $ make YANKCMD=pbcopy
 
 ## License
 
-Copyright (c) 2015-2023 Anton Lindqvist.
+Copyright (c) 2015-2024 Anton Lindqvist.
 Distributed under the MIT license.
 
 [xsel]: http://www.vergenet.net/~conrad/software/xsel/
