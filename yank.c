@@ -131,11 +131,12 @@ fcmp(const struct field *f1, const struct field *f2)
 static ssize_t
 xwrite(int fd, const char *s, size_t nmemb)
 {
-	ssize_t r;
 	size_t n;
 
 	n = nmemb;
 	do {
+		ssize_t r;
+
 		r = write(fd, s, n);
 		if (r == -1)
 			return r;
@@ -211,7 +212,7 @@ tsetup(void)
 	struct winsize ws;
 	regmatch_t r;
 	char *e, *s;
-	size_t m, n, w;
+	size_t m, n;
 	unsigned int i, j;
 
 	if ((tty.rfd = open("/dev/tty", O_RDONLY)) == -1)
@@ -242,6 +243,8 @@ tsetup(void)
 	}
 
 	for (i = j = 0, s = e = in.v; n && i < ws.ws_row; i++) {
+		size_t w;
+
 		if (s == e && !(e = memchr(s + 1, '\n', n)))
 			e = in.v + in.nmemb;
 
@@ -339,11 +342,13 @@ static const struct field *
 tmain(void)
 {
 	size_t n;
-	int c, i, j, k;
+	int i, j, k;
 
 	i = j = 0;
 	n = f.v[f.nmemb].lo;
 	for (;;) {
+		int c;
+
 		tputs(T_RESTORE_CURSOR);
 		if (f.nmemb > 0) {
 			twrite(in.v, f.v[i].so);
