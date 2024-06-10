@@ -10,6 +10,16 @@ OBJS=	yank.o
 
 KNFMT+=	yank.c
 
+CPPCHECK+=	yank.c
+
+CPPCHECKFLAGS+=	--quiet
+CPPCHECKFLAGS+=	--check-level=exhaustive
+CPPCHECKFLAGS+=	--enable=all
+CPPCHECKFLAGS+=	--error-exitcode=1
+CPPCHECKFLAGS+=	--max-configs=2
+CPPCHECKFLAGS+=	--suppress-xml=cppcheck-suppressions.xml
+CPPCHECKFLAGS+=	${CPPFLAGS}
+
 INSTALL_PROGRAM=	install -s -m 0755
 INSTALL_MAN=		install -m 0644
 
@@ -61,5 +71,9 @@ lint:
 	cd ${.CURDIR} && mandoc -Tlint -Wstyle yank.1
 	cd ${.CURDIR} && knfmt -ds ${KNFMT}
 .PHONY: lint
+
+lint-cppcheck:
+	cd ${.CURDIR} && cppcheck ${CPPCHECKFLAGS} ${CPPCHECK}
+.PHONY: lint-cppcheck
 
 -include config.mk
