@@ -20,6 +20,9 @@ CPPCHECKFLAGS+=	--max-configs=2
 CPPCHECKFLAGS+=	--suppress-xml=cppcheck-suppressions.xml
 CPPCHECKFLAGS+=	${CPPFLAGS}
 
+IWYUFLAGS+=	-a yank.c:sys/ttycom.h
+IWYUFLAGS+=	${CPPFLAGS}
+
 INSTALL_PROGRAM=	install -s -m 0755
 INSTALL_MAN=		install -m 0644
 
@@ -75,5 +78,9 @@ lint:
 lint-cppcheck:
 	cd ${.CURDIR} && cppcheck ${CPPCHECKFLAGS} ${CPPCHECK}
 .PHONY: lint-cppcheck
+
+lint-include-what-you-use:
+	cd ${.CURDIR} && iwyu-filter ${IWYUFLAGS} -- ${CPPCHECK}
+.PHONY: lint-include-what-you-use
 
 -include config.mk
