@@ -4,7 +4,6 @@
 #include <err.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <getopt.h>
 #include <locale.h>
 #include <regex.h>
 #include <stdio.h>
