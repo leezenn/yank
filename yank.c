@@ -331,9 +331,10 @@ tgetc(void)
 		return KEY_TERM;	/* EOF */
 	buf[n] = '\0';
 
-	for (i = 0; keys[i].s != NULL; i++)
+	for (i = 0; keys[i].s != NULL; i++) {
 		if (strncmp(keys[i].s, buf, strlen(keys[i].s)) == 0)
 			return keys[i].c;
+	}
 
 	return 0;
 }
