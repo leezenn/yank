@@ -20,7 +20,6 @@ CPPCHECKFLAGS+=	--max-configs=2
 CPPCHECKFLAGS+=	--suppress-xml=cppcheck-suppressions.xml
 CPPCHECKFLAGS+=	${CPPFLAGS}
 
-IWYUFLAGS+=	-a yank.c:sys/ttycom.h
 IWYUFLAGS+=	${CPPFLAGS}
 
 INSTALL_PROGRAM=	install -s -m 0755
