@@ -342,7 +342,7 @@ static const struct field *
 tmain(void)
 {
 	size_t n;
-	int i, j, k;
+	int i, j;
 
 	i = j = 0;
 	n = f.v[f.nmemb].lo;
@@ -390,7 +390,7 @@ tmain(void)
 				if (j == (ssize_t)f.nmemb)
 					break;
 			} else {
-				k = i;
+				int k = i;
 				while (k && f.v[i].lo == f.v[k].lo)
 					k--;
 				j = k;
