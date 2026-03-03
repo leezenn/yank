@@ -147,12 +147,20 @@ $ make PREFIX=DIR install
 ```
 
 The default yank command can be defined using the `YANKCMD` variable.
-For instance,
-macOS users would prefer `pbcopy(1)`:
 
-```sh
-$ make YANKCMD=pbcopy
-```
+- macOS users would prefer `pbcopy(1)`:
+
+  ```sh
+  $ make YANKCMD=pbcopy
+  ```
+
+- Using `shcopy(1)` allows the selected field to be synchronized with the
+  clipboard on your local machine when using yank over SSH or in headless
+  environments.
+
+  ```sh
+  $ make YANKCMD=shcopy
+  ```
 
 ## License
 
