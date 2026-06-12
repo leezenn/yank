@@ -84,4 +84,7 @@ lint-include-what-you-use:
 	cd ${.CURDIR} && iwyu-filter ${IWYUFLAGS} -- ${CPPCHECK}
 .PHONY: lint-include-what-you-use
 
+test:
+.PHONY: test
+
 -include config.mk
