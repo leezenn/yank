@@ -35,6 +35,7 @@ enum {
 	KEY_RIGHT,
 	KEY_DOWN,
 	KEY_LEFT,
+	KEY_LINE,
 };
 
 struct field {
@@ -48,6 +49,7 @@ struct pattern {
 	char	*str;
 	int	 flags;
 	int	 valid;
+	int	 line;
 };
 
 struct tty {
@@ -150,7 +152,9 @@ fields(struct pattern *pattern, const char *str, const struct tty *tty)
 	}
 	pattern->valid = 1;
 
+	f.nmemb = 0;
 	f.size = 32;
+	free(f.v);
 	if ((f.v = malloc(f.size*sizeof(struct field))) == NULL)
 		err(1, NULL);
 	m = n = MIN(tty->ws.ws_col * tty->ws.ws_row, (ssize_t)in.nmemb);
@@ -322,6 +326,7 @@ tgetc(const struct tty *tty)
 		{ "\003",	KEY_TERM },	/* Ctrl-C */
 		{ "\004",	KEY_TERM },	/* Ctrl-D */
 		{ "\005",	KEY_END },	/* Ctrl-E */
+		{ "\014",	KEY_LINE },     /* Ctrl-L */
 		{ "\016",	KEY_RIGHT },	/* Ctrl-N */
 		{ "\020",	KEY_LEFT },	/* Ctrl-P */
 		{ "G",		KEY_END },
@@ -356,7 +361,7 @@ tgetc(const struct tty *tty)
 }
 
 static const struct field *
-tmain(const struct tty *tty)
+tmain(const struct tty *tty, struct pattern *pattern)
 {
 	size_t n;
 	int i, j;
@@ -425,6 +430,29 @@ tmain(const struct tty *tty)
 			    f.v[j].lo == f.v[j + 1].lo; j++)
 				continue;
 			break;
+		case KEY_LINE: {
+			size_t oldlo = f.nmemb > 0 ? f.v[i].lo : 0;
+
+			pattern->line = !pattern->line;
+			if (pattern->line) {
+				char *p = strtopat("");
+				int ok = fields(pattern, p, tty);
+				free(p);
+				if (!ok)
+					return NULL;
+			} else {
+				if (!fields(pattern, pattern->str, tty))
+					return NULL;
+			}
+
+			n = f.v[f.nmemb].lo;
+			/* Find first field on the same line. */
+			for (j = 0; j < (ssize_t)f.nmemb && f.v[j].lo < oldlo; j++)
+				continue;
+			if (j == (ssize_t)f.nmemb)
+				j = 0;
+			break;
+		}
 		}
 		if (j >= 0 && j < (ssize_t)f.nmemb)
 			i = j;
@@ -505,7 +533,7 @@ main(int argc, char *argv[])
 	} else if (one && f.nmemb == 1) {
 		field = &f.v[0];
 	} else {
-		field = tmain(&tty);
+		field = tmain(&tty, &pattern);
 	}
 	tend(&tty);
 	if (field == NULL)
