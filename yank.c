@@ -59,6 +59,7 @@ static struct {
 	size_t		 nmemb;
 	size_t		 size;
 	struct field	*v;
+	int		 nlines; /* effective number of lines */
 } f;
 
 static struct {
@@ -126,6 +127,56 @@ fcmp(const struct field *f1, const struct field *f2)
 	s2 = f2->so - f2->lo, e2 = f2->eo - f2->lo;
 
 	return MAX(s1, s2) <= MIN(e1, e2) ? 0 : (e1 < s2 ? 1 : -1);
+}
+
+static void
+fields(const struct tty *tty)
+{
+	regmatch_t r;
+	char *e, *s;
+	size_t m, n;
+	unsigned int i, j;
+
+	f.size = 32;
+	if ((f.v = malloc(f.size*sizeof(struct field))) == NULL)
+		err(1, NULL);
+	m = n = MIN(tty->ws.ws_col * tty->ws.ws_row, (ssize_t)in.nmemb);
+	s = e = in.v;
+	while (m && !regexec(&reg, e, 1, &r, 0) && r.rm_eo - r.rm_so) {
+		f.v[f.nmemb].so = f.v[f.nmemb].eo = e - s;
+		f.v[f.nmemb].so += r.rm_so;
+		f.v[f.nmemb].eo += MAX(MIN(r.rm_eo, (ssize_t)m) - 1, 0);
+		e += r.rm_eo;
+		m -= MIN(r.rm_eo, (ssize_t)m);
+
+		if (++f.nmemb < f.size)
+			continue;
+		f.size *= 2;
+		if ((f.v = realloc(f.v, f.size*sizeof(struct field))) == NULL)
+			err(1, NULL);
+	}
+
+	for (i = j = 0, s = e = in.v; n && i < tty->ws.ws_row; i++) {
+		size_t w;
+
+		if (s == e && !(e = memchr(s + 1, '\n', n)))
+			e = in.v + in.nmemb;
+
+		w = MIN(e - s, tty->ws.ws_col);
+		for (; j < f.nmemb && f.v[j].so < (size_t)(s - in.v + w); j++)
+			f.v[j].lo = s - in.v;
+		s += w;
+		n -= w;
+	}
+	f.nmemb = MIN(f.nmemb, j);
+	/* Ensure last field does not exceed the terminal width. */
+	if (n > 0 && f.nmemb > 0 &&
+	    f.v[f.nmemb - 1].eo - f.v[f.nmemb - 1].lo >= tty->ws.ws_col)
+		f.v[f.nmemb - 1].eo = f.v[f.nmemb - 1].lo + tty->ws.ws_col - 1;
+	/* Number of bytes to output. */
+	f.v[f.nmemb].lo = MAX(s - in.v - 1, 0);
+	/* Effective number of lines. */
+	f.nlines = i;
 }
 
 static ssize_t
@@ -209,10 +260,6 @@ static void
 tsetup(struct tty *tty)
 {
 	struct termios attr;
-	regmatch_t r;
-	char *e, *s;
-	size_t m, n;
-	unsigned int i, j;
 
 	if ((tty->rfd = open("/dev/tty", O_RDONLY)) == -1)
 		err(1, "/dev/tty");
@@ -221,45 +268,6 @@ tsetup(struct tty *tty)
 
 	if (ioctl(tty->rfd, TIOCGWINSZ, &tty->ws) == -1)
 		err(1, "TIOCGWINSZ");
-
-	f.size = 32;
-	if ((f.v = malloc(f.size*sizeof(struct field))) == NULL)
-		err(1, NULL);
-	m = n = MIN(tty->ws.ws_col * tty->ws.ws_row, (ssize_t)in.nmemb);
-	s = e = in.v;
-	while (m && !regexec(&reg, e, 1, &r, 0) && r.rm_eo - r.rm_so) {
-		f.v[f.nmemb].so = f.v[f.nmemb].eo = e - s;
-		f.v[f.nmemb].so += r.rm_so;
-		f.v[f.nmemb].eo += MAX(MIN(r.rm_eo, (ssize_t)m) - 1, 0);
-		e += r.rm_eo;
-		m -= MIN(r.rm_eo, (ssize_t)m);
-
-		if (++f.nmemb < f.size)
-			continue;
-		f.size *= 2;
-		if ((f.v = realloc(f.v, f.size*sizeof(struct field))) == NULL)
-			err(1, NULL);
-	}
-
-	for (i = j = 0, s = e = in.v; n && i < tty->ws.ws_row; i++) {
-		size_t w;
-
-		if (s == e && !(e = memchr(s + 1, '\n', n)))
-			e = in.v + in.nmemb;
-
-		w = MIN(e - s, tty->ws.ws_col);
-		for (; j < f.nmemb && f.v[j].so < (size_t)(s - in.v + w); j++)
-			f.v[j].lo = s - in.v;
-		s += w;
-		n -= w;
-	}
-	f.nmemb = MIN(f.nmemb, j);
-	/* Ensure last field does not exceed the terminal width. */
-	if (n > 0 && f.nmemb > 0 &&
-	    f.v[f.nmemb - 1].eo - f.v[f.nmemb - 1].lo >= tty->ws.ws_col)
-		f.v[f.nmemb - 1].eo = f.v[f.nmemb - 1].lo + tty->ws.ws_col - 1;
-	/* Number of bytes to output. */
-	f.v[f.nmemb].lo = MAX(s - in.v - 1, 0);
 
 	if (tcgetattr(tty->rfd, &tty->attr) == -1)
 		err(1, "tcgetattr");
@@ -272,12 +280,6 @@ tsetup(struct tty *tty)
 	if (tty->ca)
 		tputs(tty, T_ENTER_CA_MODE);
 	tputs(tty, T_CURSOR_INVISIBLE);
-	/* Emit the number of lines and save the cursor position. */
-	for (j = 0; j < i; j++)
-		tputs(tty, "\n");
-	for (j = 0; j < i; j++)
-		tputs(tty, "\033M");
-	tputs(tty, T_SAVE_CURSOR);
 }
 
 static void
@@ -343,6 +345,13 @@ tmain(const struct tty *tty)
 {
 	size_t n;
 	int i, j;
+
+	/* Emit the number of lines and save the cursor position. */
+	for (i = 0; i < f.nlines; i++)
+		tputs(tty, "\n");
+	for (i = 0; i < f.nlines; i++)
+		tputs(tty, "\033M");
+	tputs(tty, T_SAVE_CURSOR);
 
 	i = j = 0;
 	n = f.v[f.nmemb].lo;
@@ -480,6 +489,7 @@ main(int argc, char *argv[])
 
 	input();
 	tsetup(&tty);
+	fields(&tty);
 	if (one && f.nmemb == 1)
 		field = &f.v[0];
 	else
