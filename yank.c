@@ -43,6 +43,13 @@ struct field {
 	size_t	lo; /* line offset */
 };
 
+struct tty {
+	struct termios	attr;
+	int		rfd;
+	int		wfd;
+	int		ca;	/* use alternate screen */
+};
+
 static regex_t reg;
 
 static char **yankargv;
@@ -58,13 +65,6 @@ static struct {
 	size_t	 nmemb;
 	char	*v;
 } in;
-
-static struct {
-	int		rfd;
-	int		wfd;
-	int		ca;	/* use alternate screen */
-	struct termios	attr;
-} tty;
 
 static void
 input(void)
@@ -189,23 +189,23 @@ yank(const char *s, size_t nmemb)
 }
 
 static void
-twrite(const char *s, size_t nmemb)
+twrite(const struct tty *tty, const char *s, size_t nmemb)
 {
-	if (xwrite(tty.wfd, s, nmemb) == -1)
+	if (xwrite(tty->wfd, s, nmemb) == -1)
 		err(1, "write");
 }
 
 static void
-tputs(const char *s)
+tputs(const struct tty *tty, const char *s)
 {
 	size_t n;
 
 	n = strlen(s);
-	twrite(s, n);
+	twrite(tty, s, n);
 }
 
 static void
-tsetup(void)
+tsetup(struct tty *tty)
 {
 	struct termios attr;
 	struct winsize ws;
@@ -214,12 +214,12 @@ tsetup(void)
 	size_t m, n;
 	unsigned int i, j;
 
-	if ((tty.rfd = open("/dev/tty", O_RDONLY)) == -1)
+	if ((tty->rfd = open("/dev/tty", O_RDONLY)) == -1)
 		err(1, "/dev/tty");
-	if ((tty.wfd = open("/dev/tty", O_WRONLY)) == -1)
+	if ((tty->wfd = open("/dev/tty", O_WRONLY)) == -1)
 		err(1, "/dev/tty");
 
-	if (ioctl(tty.rfd, TIOCGWINSZ, &ws) == -1)
+	if (ioctl(tty->rfd, TIOCGWINSZ, &ws) == -1)
 		err(1, "TIOCGWINSZ");
 
 	f.size = 32;
@@ -261,40 +261,40 @@ tsetup(void)
 	/* Number of bytes to output. */
 	f.v[f.nmemb].lo = MAX(s - in.v - 1, 0);
 
-	if (tcgetattr(tty.rfd, &tty.attr) == -1)
+	if (tcgetattr(tty->rfd, &tty->attr) == -1)
 		err(1, "tcgetattr");
-	attr = tty.attr;
+	attr = tty->attr;
 	attr.c_iflag |= ICRNL;
 	attr.c_lflag &= ~(ICANON|ECHO|ISIG);
-	if (tcsetattr(tty.rfd, TCSANOW, &attr) == -1)
+	if (tcsetattr(tty->rfd, TCSANOW, &attr) == -1)
 		err(1, "tcsetattr");
 
-	if (tty.ca)
-		tputs(T_ENTER_CA_MODE);
-	tputs(T_CURSOR_INVISIBLE);
+	if (tty->ca)
+		tputs(tty, T_ENTER_CA_MODE);
+	tputs(tty, T_CURSOR_INVISIBLE);
 	/* Emit the number of lines and save the cursor position. */
 	for (j = 0; j < i; j++)
-		tputs("\n");
+		tputs(tty, "\n");
 	for (j = 0; j < i; j++)
-		tputs("\033M");
-	tputs(T_SAVE_CURSOR);
+		tputs(tty, "\033M");
+	tputs(tty, T_SAVE_CURSOR);
 }
 
 static void
-tend(void)
+tend(const struct tty *tty)
 {
-	tputs(T_RESTORE_CURSOR);
-	tputs(T_CLR_EOS);
-	tputs(T_CURSOR_VISIBLE);
-	if (tty.ca)
-		tputs(T_EXIT_CA_MODE);
-	tcsetattr(tty.rfd, TCSANOW, &tty.attr);
-	close(tty.rfd);
-	close(tty.wfd);
+	tputs(tty, T_RESTORE_CURSOR);
+	tputs(tty, T_CLR_EOS);
+	tputs(tty, T_CURSOR_VISIBLE);
+	if (tty->ca)
+		tputs(tty, T_EXIT_CA_MODE);
+	tcsetattr(tty->rfd, TCSANOW, &tty->attr);
+	close(tty->rfd);
+	close(tty->wfd);
 }
 
 static int
-tgetc(void)
+tgetc(const struct tty *tty)
 {
 	static struct {
 		const char	*s;
@@ -323,7 +323,7 @@ tgetc(void)
 	ssize_t n;
 	int i;
 
-	n = read(tty.rfd, buf, sizeof(buf) - 1);
+	n = read(tty->rfd, buf, sizeof(buf) - 1);
 	if (n == -1)
 		err(1, "read");
 	if (n == 0)
@@ -339,7 +339,7 @@ tgetc(void)
 }
 
 static const struct field *
-tmain(void)
+tmain(const struct tty *tty)
 {
 	size_t n;
 	int i, j;
@@ -349,18 +349,18 @@ tmain(void)
 	for (;;) {
 		int c;
 
-		tputs(T_RESTORE_CURSOR);
+		tputs(tty, T_RESTORE_CURSOR);
 		if (f.nmemb > 0) {
-			twrite(in.v, f.v[i].so);
-			tputs(T_ENTER_STANDOUT_MODE);
-			twrite(in.v + f.v[i].so, f.v[i].eo - f.v[i].so + 1);
-			tputs(T_EXIT_STANDOUT_MODE);
-			twrite(in.v + f.v[i].eo + 1, n - f.v[i].eo);
+			twrite(tty, in.v, f.v[i].so);
+			tputs(tty, T_ENTER_STANDOUT_MODE);
+			twrite(tty, in.v + f.v[i].so, f.v[i].eo - f.v[i].so + 1);
+			tputs(tty, T_EXIT_STANDOUT_MODE);
+			twrite(tty, in.v + f.v[i].eo + 1, n - f.v[i].eo);
 		} else {
-			twrite(in.v, n);
+			twrite(tty, in.v, n);
 		}
 
-		c = tgetc();
+		c = tgetc(tty);
 		switch (c) {
 		case KEY_ENTER:
 			if (f.nmemb > 0)
@@ -418,6 +418,7 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+	struct tty tty = {0};
 	const struct field *field;
 	char *pat;
 	int one = 0;
@@ -478,12 +479,12 @@ main(int argc, char *argv[])
 		yankargv[i] = argv[i];
 
 	input();
-	tsetup();
+	tsetup(&tty);
 	if (one && f.nmemb == 1)
 		field = &f.v[0];
 	else
-		field = tmain();
-	tend();
+		field = tmain(&tty);
+	tend(&tty);
 	if (field == NULL)
 		return 1;
 	yank(in.v + field->so, field->eo - field->so + 1);
