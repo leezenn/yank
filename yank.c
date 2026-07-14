@@ -43,6 +43,13 @@ struct field {
 	size_t	lo; /* line offset */
 };
 
+struct pattern {
+	regex_t	 r;
+	char	*str;
+	int	 flags;
+	int	 valid;
+};
+
 struct tty {
 	struct termios	attr;
 	struct winsize	ws;
@@ -50,8 +57,6 @@ struct tty {
 	int		wfd;
 	int		ca;	/* use alternate screen */
 };
-
-static regex_t reg;
 
 static char **yankargv;
 
@@ -129,20 +134,28 @@ fcmp(const struct field *f1, const struct field *f2)
 	return MAX(s1, s2) <= MIN(e1, e2) ? 0 : (e1 < s2 ? 1 : -1);
 }
 
-static void
-fields(const struct tty *tty)
+static int
+fields(struct pattern *pattern, const char *str, const struct tty *tty)
 {
 	regmatch_t r;
 	char *e, *s;
 	size_t m, n;
 	unsigned int i, j;
 
+	if (pattern->valid)
+		regfree(&pattern->r);
+	if (regcomp(&pattern->r, str, pattern->flags) != 0) {
+		warnx("invalid regular expression");
+		return 0;
+	}
+	pattern->valid = 1;
+
 	f.size = 32;
 	if ((f.v = malloc(f.size*sizeof(struct field))) == NULL)
 		err(1, NULL);
 	m = n = MIN(tty->ws.ws_col * tty->ws.ws_row, (ssize_t)in.nmemb);
 	s = e = in.v;
-	while (m && !regexec(&reg, e, 1, &r, 0) && r.rm_eo - r.rm_so) {
+	while (m && !regexec(&pattern->r, e, 1, &r, 0) && r.rm_eo - r.rm_so) {
 		f.v[f.nmemb].so = f.v[f.nmemb].eo = e - s;
 		f.v[f.nmemb].so += r.rm_so;
 		f.v[f.nmemb].eo += MAX(MIN(r.rm_eo, (ssize_t)m) - 1, 0);
@@ -177,6 +190,8 @@ fields(const struct tty *tty)
 	f.v[f.nmemb].lo = MAX(s - in.v - 1, 0);
 	/* Effective number of lines. */
 	f.nlines = i;
+
+	return 1;
 }
 
 static ssize_t
@@ -427,11 +442,10 @@ usage(void)
 int
 main(int argc, char *argv[])
 {
+	struct pattern pattern = {.flags = REG_EXTENDED};
 	struct tty tty = {0};
-	const struct field *field;
-	char *pat;
+	const struct field *field = NULL;
 	int one = 0;
-	int rflags = REG_EXTENDED;
 	int c, i;
 
 	setlocale(LC_CTYPE, "");
@@ -441,28 +455,28 @@ main(int argc, char *argv[])
 		err(1, "pledge");
 #endif
 
-	pat = strtopat(" ");
+	pattern.str = strtopat(" ");
 	while ((c = getopt(argc, argv, "1ilvxd:g:")) != -1) {
 		switch (c) {
 		case '1':
 			one = 1;
 			break;
 		case 'd':
-			free(pat);
-			pat = strtopat(optarg);
+			free(pattern.str);
+			pattern.str = strtopat(optarg);
 			break;
 		case 'g':
-			free(pat);
-			if ((pat = strdup(optarg)) == NULL)
+			free(pattern.str);
+			if ((pattern.str = strdup(optarg)) == NULL)
 				err(1, NULL);
-			rflags |= REG_NEWLINE;
+			pattern.flags |= REG_NEWLINE;
 			break;
 		case 'i':
-			rflags |= REG_ICASE;
+			pattern.flags |= REG_ICASE;
 			break;
 		case 'l':
-			free(pat);
-			pat = strtopat("");
+			free(pattern.str);
+			pattern.str = strtopat("");
 			break;
 		case 'v':
 			puts("yank " VERSION);
@@ -477,9 +491,6 @@ main(int argc, char *argv[])
 	argc -= optind;
 	argv += optind;
 
-	if (regcomp(&reg, pat, rflags) != 0)
-		errx(1, "invalid regular expression");
-
 	/* Ensure space for yank command and null terminator. */
 	if ((yankargv = calloc(argc + 2, sizeof(char *))) == NULL)
 		err(1, NULL);
@@ -489,11 +500,13 @@ main(int argc, char *argv[])
 
 	input();
 	tsetup(&tty);
-	fields(&tty);
-	if (one && f.nmemb == 1)
+	if (!fields(&pattern, pattern.str, &tty)) {
+		/* nothing */
+	} else if (one && f.nmemb == 1) {
 		field = &f.v[0];
-	else
+	} else {
 		field = tmain(&tty);
+	}
 	tend(&tty);
 	if (field == NULL)
 		return 1;
