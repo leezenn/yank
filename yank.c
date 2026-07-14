@@ -45,6 +45,7 @@ struct field {
 
 struct tty {
 	struct termios	attr;
+	struct winsize	ws;
 	int		rfd;
 	int		wfd;
 	int		ca;	/* use alternate screen */
@@ -208,7 +209,6 @@ static void
 tsetup(struct tty *tty)
 {
 	struct termios attr;
-	struct winsize ws;
 	regmatch_t r;
 	char *e, *s;
 	size_t m, n;
@@ -219,13 +219,13 @@ tsetup(struct tty *tty)
 	if ((tty->wfd = open("/dev/tty", O_WRONLY)) == -1)
 		err(1, "/dev/tty");
 
-	if (ioctl(tty->rfd, TIOCGWINSZ, &ws) == -1)
+	if (ioctl(tty->rfd, TIOCGWINSZ, &tty->ws) == -1)
 		err(1, "TIOCGWINSZ");
 
 	f.size = 32;
 	if ((f.v = malloc(f.size*sizeof(struct field))) == NULL)
 		err(1, NULL);
-	m = n = MIN(ws.ws_col*ws.ws_row, (ssize_t)in.nmemb);
+	m = n = MIN(tty->ws.ws_col * tty->ws.ws_row, (ssize_t)in.nmemb);
 	s = e = in.v;
 	while (m && !regexec(&reg, e, 1, &r, 0) && r.rm_eo - r.rm_so) {
 		f.v[f.nmemb].so = f.v[f.nmemb].eo = e - s;
@@ -241,13 +241,13 @@ tsetup(struct tty *tty)
 			err(1, NULL);
 	}
 
-	for (i = j = 0, s = e = in.v; n && i < ws.ws_row; i++) {
+	for (i = j = 0, s = e = in.v; n && i < tty->ws.ws_row; i++) {
 		size_t w;
 
 		if (s == e && !(e = memchr(s + 1, '\n', n)))
 			e = in.v + in.nmemb;
 
-		w = MIN(e - s, ws.ws_col);
+		w = MIN(e - s, tty->ws.ws_col);
 		for (; j < f.nmemb && f.v[j].so < (size_t)(s - in.v + w); j++)
 			f.v[j].lo = s - in.v;
 		s += w;
@@ -256,8 +256,8 @@ tsetup(struct tty *tty)
 	f.nmemb = MIN(f.nmemb, j);
 	/* Ensure last field does not exceed the terminal width. */
 	if (n > 0 && f.nmemb > 0 &&
-	    f.v[f.nmemb - 1].eo - f.v[f.nmemb - 1].lo >= ws.ws_col)
-		f.v[f.nmemb - 1].eo = f.v[f.nmemb - 1].lo + ws.ws_col - 1;
+	    f.v[f.nmemb - 1].eo - f.v[f.nmemb - 1].lo >= tty->ws.ws_col)
+		f.v[f.nmemb - 1].eo = f.v[f.nmemb - 1].lo + tty->ws.ws_col - 1;
 	/* Number of bytes to output. */
 	f.v[f.nmemb].lo = MAX(s - in.v - 1, 0);
 
