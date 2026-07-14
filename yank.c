@@ -427,7 +427,7 @@ main(int argc, char *argv[])
 	setlocale(LC_CTYPE, "");
 
 #ifdef __OpenBSD__
-	if (pledge("stdio tty proc exec", NULL) == -1)
+	if (pledge("stdio rpath wpath tty proc exec", NULL) == -1)
 		err(1, "pledge");
 #endif
 
