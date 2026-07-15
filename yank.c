@@ -58,6 +58,7 @@ struct tty {
 	int		rfd;
 	int		wfd;
 	int		ca;	/* use alternate screen */
+	int		dirty;
 };
 
 static char **yankargv;
@@ -304,8 +305,10 @@ tsetup(struct tty *tty)
 static void
 tend(const struct tty *tty)
 {
-	tputs(tty, T_RESTORE_CURSOR);
-	tputs(tty, T_CLR_EOS);
+	if (tty->dirty) {
+		tputs(tty, T_RESTORE_CURSOR);
+		tputs(tty, T_CLR_EOS);
+	}
 	tputs(tty, T_CURSOR_VISIBLE);
 	if (tty->ca)
 		tputs(tty, T_EXIT_CA_MODE);
@@ -361,7 +364,7 @@ tgetc(const struct tty *tty)
 }
 
 static const struct field *
-tmain(const struct tty *tty, struct pattern *pattern)
+tmain(struct tty *tty, struct pattern *pattern)
 {
 	size_t n;
 	int i, j;
@@ -372,6 +375,7 @@ tmain(const struct tty *tty, struct pattern *pattern)
 	for (i = 0; i < f.nlines; i++)
 		tputs(tty, "\033M");
 	tputs(tty, T_SAVE_CURSOR);
+	tty->dirty = 1;
 
 	i = j = 0;
 	n = f.v[f.nmemb].lo;
