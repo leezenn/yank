@@ -48,17 +48,9 @@ clean:
 .PHONY: clean
 
 dist:
-	set -e; \
-	d=yank-${VERSION}; \
-	mkdir $$d; \
-	for f in ${DISTFILES}; do \
-		mkdir -p $$d/`dirname $$f`; \
-		cp -p ${.CURDIR}/$$f $$d/$$f; \
-	done; \
-	find $$d -type d -exec touch -r ${.CURDIR}/Makefile {} \;; \
-	tar czvf ${.CURDIR}/$$d.tar.gz $$d; \
-	(cd ${.CURDIR}; sha256 $$d.tar.gz >$$d.sha256); \
-	rm -r $$d
+	set -e; p=yank-${VERSION}; cd ${.CURDIR}; \
+	git archive --output $$p.tar.gz --prefix $$p/ v${VERSION}; \
+	sha256 $$p.tar.gz >$$p.sha256
 .PHONY: dist
 
 format:
