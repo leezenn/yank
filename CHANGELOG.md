@@ -1,3 +1,11 @@
+# 1.4.0 - 2026-07-16
+
+## News
+
+- Add Ctrl+L to toggle between current delimiter and line delimiter.
+  (589709d9c549)
+  (Aurélien Buchet)
+
 # v1.3.0 - 2022-06-18
 
 ## News
